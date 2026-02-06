@@ -49,7 +49,7 @@ function hasOgConfig(link: z.infer<typeof LinkSchema>): boolean {
 export default eventHandler(async (event) => {
   const { pathname: slug } = parsePath(event.path.replace(/^\/|\/$/g, ''))
   const { slugRegex, reserveSlug } = useAppConfig()
-  const { homeURL, linkCacheTtl, caseSensitive, redirectWithQuery, redirectStatusCode } = useRuntimeConfig(event)
+  const { homeURL, linkCacheTtl, caseSensitive, redirectStatusCode } = useRuntimeConfig(event)
   const { cloudflare } = event.context
 
   if (event.path === '/' && homeURL)
@@ -82,11 +82,14 @@ export default eventHandler(async (event) => {
 
       const userAgent = getHeader(event, 'user-agent') || ''
       const query = getQuery(event)
-      const buildTarget = (url: string) => redirectWithQuery ? withQuery(url, query) : url
+      
+      // 【修改点 1】强制使用 withQuery，不再判断 redirectWithQuery 开关
+      const buildTarget = (url: string) => withQuery(url, query)
 
       const deviceRedirectUrl = getDeviceRedirectUrl(userAgent, link)
       if (deviceRedirectUrl) {
-        return sendRedirect(event, deviceRedirectUrl, +redirectStatusCode)
+        // 【修改点 2】对设备专用跳转（如手机应用商店地址）也应用参数拼接
+        return sendRedirect(event, buildTarget(deviceRedirectUrl), +redirectStatusCode)
       }
 
       if (isSocialBot(userAgent) && hasOgConfig(link)) {
@@ -96,6 +99,7 @@ export default eventHandler(async (event) => {
         return html
       }
 
+      // 最终重定向应用参数拼接
       return sendRedirect(event, buildTarget(link.url), +redirectStatusCode)
     }
   }
